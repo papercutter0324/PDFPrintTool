@@ -7,26 +7,144 @@ NSApp.setActivationPolicy(.prohibited)
 
 // ------------------------------------------------------------
 // Usage:
-// PDFPrintTool <pdfPath> <printerName> <fit|actual> [pagesize]
+// PDFPrintTool -f <path>[,<path2>...] -d <printer> -s <fit|actual> [-p <size>] [--fast-fail]
 //
-// pagesize (optional):
+// Options:
+//   -h, --help, --Help                  Show this help and exit
+//   -f, --file, --File <path(s)>        One or more PDF paths. Accepts a comma-separated list
+//                                       (e.g., file1.pdf,file2.pdf) or repeated -f flags.
+//   -d, --printer, --Printer <name>     Target printer name
+//   -s, --scaling, --Scaling <mode>     Scaling mode: fit or actual
+//   -p, --papersize, --Papersize <size> Paper size (A4, B5, pdf (default), etc.)
+//                                       You can also use --papersize=A4
+//   --fast-fail                         Exit immediately on first error (default: continue on error)
+//
+// pagesize examples:
 //   a4   -> A4
 //   b5   -> B5
 //   pdf  -> Use PDF's original page size (default)
 // ------------------------------------------------------------
 
-// Ensure we have required arguments
-guard CommandLine.arguments.count >= 4 else {
-    fputs("Usage: PDFPrintTool <pdfPath> <printerName> <fit|actual> [pagesize]\n", stderr)
+func optionValue(_ names: [String], in args: [String]) -> String? {
+    var i = 0
+    while i < args.count {
+        let arg = args[i]
+        for name in names {
+            if arg == name {
+                // Separate value: -p A4 or --papersize A4
+                if i + 1 < args.count, !args[i + 1].hasPrefix("-") {
+                    return args[i + 1]
+                }
+                return nil
+            }
+            if arg.hasPrefix(name + "=") {
+                // Attached value: --papersize=A4 or -p=A4
+                return String(arg.dropFirst(name.count + 1))
+            }
+        }
+        i += 1
+    }
+    return nil
+}
+
+func optionValues(_ names: [String], in args: [String]) -> [String] {
+    var results: [String] = []
+    var i = 0
+    while i < args.count {
+        let arg = args[i]
+        for name in names {
+            if arg == name {
+                if i + 1 < args.count, !args[i + 1].hasPrefix("-") {
+                    results.append(args[i + 1])
+                }
+            } else if arg.hasPrefix(name + "=") {
+                results.append(String(arg.dropFirst(name.count + 1)))
+            }
+        }
+        i += 1
+    }
+    return results
+}
+
+let fullUsageText = """
+Usage: PDFPrintTool -f <path>[,<path2>...] -d <printer> -s <fit|actual> [-p <size>] [--fast-fail]
+
+Options:
+  -h, --help, --Help                  Show this help and exit
+  -f, --file, --File <path(s)>        One or more PDF paths. Accepts a comma-separated list
+                                      (e.g., file1.pdf,file2.pdf) or repeated -f flags.
+  -d, --printer, --Printer <name>     Target printer name
+  -s, --scaling, --Scaling <mode>     Scaling mode: fit or actual
+  -p, --papersize, --Papersize <size> Paper size (A4, B5, pdf (default), etc.)
+                                      You can also use --papersize=A4
+  --fast-fail                         Exit immediately on first error (default: continue on error)
+
+Examples:
+  PDFPrintTool -f "/path/to/file1.pdf,/path/to/file2.pdf" -d "HP LaserJet" -s fit -p A4
+  PDFPrintTool -f "/path/to/file1.pdf" -f "/path/to/file2.pdf" -d "HP LaserJet" -s actual --fast-fail
+  PDFPrintTool --File=/path/to/file.pdf --Printer="HP LaserJet" --Scaling=actual --papersize=pdf
+"""
+
+func usageAndExit() -> Never {
+    fputs(fullUsageText, stderr)
     exit(1)
 }
 
-let pdfPath = CommandLine.arguments[1]
-let printerName = CommandLine.arguments[2]
-let scalingModeArg = CommandLine.arguments[3].lowercased()
-let pageSizeArg = CommandLine.arguments.count >= 5
-    ? CommandLine.arguments[4].lowercased()
-    : "pdf"
+func helpAndExit() -> Never {
+    fputs(fullUsageText, stderr)
+    exit(0)
+}
+
+func shortUsageAndExit() -> Never {
+    fputs("""
+PDFPrintTool: missing arguments.
+Example:
+  PDFPrintTool -f "/path/to/file.pdf" -d "HP LaserJet" -s fit -p A4
+Use -h or --Help for more information.
+""", stderr)
+    exit(1)
+}
+
+let argv = Array(CommandLine.arguments.dropFirst())
+
+// If no arguments provided, show a short message
+if argv.isEmpty {
+    shortUsageAndExit()
+}
+
+// Show detailed help and exit successfully
+if argv.contains("-h") || argv.contains("--help") || argv.contains("--Help") {
+    helpAndExit()
+}
+
+let fileArgs = optionValues(["-f", "--file", "--File"], in: argv)
+let pdfPaths: [String] = fileArgs.flatMap { value in
+    value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+}.filter { !$0.isEmpty }
+
+let printerFromFlag = optionValue(["-d", "--printer", "--Printer"], in: argv)
+let scalingFromFlag = optionValue(["-s", "--scaling", "--Scaling"], in: argv)?.lowercased()
+let pageSizeFromFlag = optionValue(["-p", "--papersize", "--Papersize"], in: argv)?.lowercased()
+let fastFail = argv.contains("--fast-fail")
+
+// Enforce required flags; no positional fallback
+
+guard !pdfPaths.isEmpty else {
+    fputs("Missing required option: -f, --file, or --File.\n", stderr)
+    usageAndExit()
+}
+
+guard let printerName = printerFromFlag else {
+    fputs("Missing required option: -d, --printer, or --Printer.\n", stderr)
+    usageAndExit()
+}
+
+guard let scalingModeArg = scalingFromFlag else {
+    fputs("Missing required option: -s, --scaling, or --Scaling.\n", stderr)
+    usageAndExit()
+}
+
+let pageSizeArg = (pageSizeFromFlag ?? "pdf")
 
 enum ScalingMode: String {
     case fit
@@ -34,7 +152,7 @@ enum ScalingMode: String {
 }
 
 guard let scalingMode = ScalingMode(rawValue: scalingModeArg) else {
-    fputs("Invalid scaling mode. Use: fit, actual\n", stderr)
+    fputs("Invalid scaling mode '\(scalingModeArg)'. Use 'fit' or 'actual'. See -h or --Help for details.\n", stderr)
     exit(1)
 }
 
@@ -53,8 +171,8 @@ enum PaperSizeOption: String {
     case pdf
 }
 
-guard let paperOption = PaperSizeOption(rawValue: pageSizeArg) else {
-    fputs("Invalid pagesize. Use: A4, B5, PDF\n", stderr)
+guard let paperOption = PaperSizeOption(rawValue: pageSizeArg.lowercased()) else {
+    fputs("Invalid pagesize '\(pageSizeArg)'. See -h or --Help for valid sizes.\n", stderr)
     exit(1)
 }
 
@@ -108,22 +226,6 @@ let Photo4x6 = NSSize(width: 288.0, height: 432.0)
 let Photo5x7 = NSSize(width: 360.0, height: 504.0)
 let Photo8x10 = NSSize(width: 576.0, height: 720.0)
 
-// Validate File
-let pdfURL = URL(fileURLWithPath: pdfPath)
-
-var isDir: ObjCBool = false
-if !FileManager.default.fileExists(atPath: pdfURL.path, isDirectory: &isDir) || isDir.boolValue {
-    fputs("PDF file not found at path: \(pdfURL.path)\n", stderr)
-    exit(1)
-}
-
-// Load PDF document and first page
-guard let pdfDocument = PDFDocument(url: pdfURL),
-      let firstPage = pdfDocument.page(at: 0) else {
-    fputs("Failed to load PDF or its first page.\n", stderr)
-    exit(1)
-}
-
 // Resolve Printer (Accept CUPS or Display Name)
 func resolvePrinter(named name: String) -> NSPrinter? {
     
@@ -154,6 +256,7 @@ guard let printer = resolvePrinter(named: printerName) else {
     for name in NSPrinter.printerNames {
         fputs("  \(name)\n", stderr)
     }
+    fputs("Use -d or --Printer to specify the target printer. See -h or --Help for details.\n", stderr)
     exit(1)
 }
 
@@ -174,64 +277,6 @@ if printInfo.responds(to: NSSelectorFromString("setJobDisposition:")) {
 printInfo.dictionary()["NSPrintDuplex"] = 2
 printInfo.dictionary()["com.apple.print.PrintSettings.PMDuplexing"] = 2
 
-let pdfPageSize = firstPage.bounds(for: .mediaBox).size
-let selectedPaperSize: NSSize
-
-switch paperOption {
-// ISO 216 A series
-case .a0: selectedPaperSize = A0
-case .a1: selectedPaperSize = A1
-case .a2: selectedPaperSize = A2
-case .a3: selectedPaperSize = A3
-case .a4: selectedPaperSize = A4
-case .a5: selectedPaperSize = A5
-case .a6: selectedPaperSize = A6
-case .a7: selectedPaperSize = A7
-case .a8: selectedPaperSize = A8
-case .a9: selectedPaperSize = A9
-case .a10: selectedPaperSize = A10
-// ISO 216 B series
-case .b0: selectedPaperSize = B0
-case .b1: selectedPaperSize = B1
-case .b2: selectedPaperSize = B2
-case .b3: selectedPaperSize = B3
-case .b4: selectedPaperSize = B4
-case .b5: selectedPaperSize = B5
-case .b6: selectedPaperSize = B6
-case .b7: selectedPaperSize = B7
-case .b8: selectedPaperSize = B8
-case .b9: selectedPaperSize = B9
-case .b10: selectedPaperSize = B10
-// ISO 269 C series (envelopes)
-case .c0: selectedPaperSize = C0
-case .c1: selectedPaperSize = C1
-case .c2: selectedPaperSize = C2
-case .c3: selectedPaperSize = C3
-case .c4: selectedPaperSize = C4
-case .c5: selectedPaperSize = C5
-case .c6: selectedPaperSize = C6
-case .c7: selectedPaperSize = C7
-case .c8: selectedPaperSize = C8
-case .c9: selectedPaperSize = C9
-case .c10: selectedPaperSize = C10
-// North American
-case .letter: selectedPaperSize = Letter
-case .legal: selectedPaperSize = Legal
-case .tabloid: selectedPaperSize = Tabloid
-case .ledger: selectedPaperSize = Ledger
-case .executive: selectedPaperSize = Executive
-case .statement: selectedPaperSize = Statement
-// Photo sizes
-case .photo4x6: selectedPaperSize = Photo4x6
-case .photo5x7: selectedPaperSize = Photo5x7
-case .photo8x10: selectedPaperSize = Photo8x10
-// Use original PDF size
-case .pdf:
-    selectedPaperSize = pdfPageSize
-}
-
-printInfo.paperSize = selectedPaperSize
-
 let scaling: PDFPrintScalingMode
 
 switch scalingMode {
@@ -241,20 +286,112 @@ case .actual:
     scaling = .pageScaleNone
 }
 
-// Create Print Operation
-guard let printOperation = pdfDocument.printOperation(
-    for: printInfo,
-    scalingMode: scaling,
-    autoRotate: true
-) else {
-    fputs("Failed to create print operation.\n", stderr)
-    exit(1)
+// Print each provided PDF
+var anyFailure = false
+
+for pdfPath in pdfPaths {
+    // Validate File
+    let pdfURL = URL(fileURLWithPath: pdfPath)
+
+    var isDir: ObjCBool = false
+    if !FileManager.default.fileExists(atPath: pdfURL.path, isDirectory: &isDir) || isDir.boolValue {
+        fputs("PDF file not found at path: \(pdfURL.path)\n", stderr)
+        fputs("Check the path or pass it with -f/--File. See -h or --Help for more information.\n", stderr)
+        if fastFail { exit(1) }
+        anyFailure = true
+        continue
+    }
+    // Load PDF document and first page
+    guard let pdfDocument = PDFDocument(url: pdfURL),
+          let firstPage = pdfDocument.page(at: 0) else {
+        fputs("Failed to load PDF or its first page for: \(pdfURL.path). Ensure the file is a valid PDF. See -h or --Help for usage.\n", stderr)
+        if fastFail { exit(1) }
+        anyFailure = true
+        continue
+    }
+
+    // Paper size (per-document when using 'pdf')
+    let pdfPageSize = firstPage.bounds(for: .mediaBox).size
+    let selectedPaperSize: NSSize
+
+    switch paperOption {
+    // ISO 216 A series
+    case .a0: selectedPaperSize = A0
+    case .a1: selectedPaperSize = A1
+    case .a2: selectedPaperSize = A2
+    case .a3: selectedPaperSize = A3
+    case .a4: selectedPaperSize = A4
+    case .a5: selectedPaperSize = A5
+    case .a6: selectedPaperSize = A6
+    case .a7: selectedPaperSize = A7
+    case .a8: selectedPaperSize = A8
+    case .a9: selectedPaperSize = A9
+    case .a10: selectedPaperSize = A10
+    // ISO 216 B series
+    case .b0: selectedPaperSize = B0
+    case .b1: selectedPaperSize = B1
+    case .b2: selectedPaperSize = B2
+    case .b3: selectedPaperSize = B3
+    case .b4: selectedPaperSize = B4
+    case .b5: selectedPaperSize = B5
+    case .b6: selectedPaperSize = B6
+    case .b7: selectedPaperSize = B7
+    case .b8: selectedPaperSize = B8
+    case .b9: selectedPaperSize = B9
+    case .b10: selectedPaperSize = B10
+    // ISO 269 C series (envelopes)
+    case .c0: selectedPaperSize = C0
+    case .c1: selectedPaperSize = C1
+    case .c2: selectedPaperSize = C2
+    case .c3: selectedPaperSize = C3
+    case .c4: selectedPaperSize = C4
+    case .c5: selectedPaperSize = C5
+    case .c6: selectedPaperSize = C6
+    case .c7: selectedPaperSize = C7
+    case .c8: selectedPaperSize = C8
+    case .c9: selectedPaperSize = C9
+    case .c10: selectedPaperSize = C10
+    // North American
+    case .letter: selectedPaperSize = Letter
+    case .legal: selectedPaperSize = Legal
+    case .tabloid: selectedPaperSize = Tabloid
+    case .ledger: selectedPaperSize = Ledger
+    case .executive: selectedPaperSize = Executive
+    case .statement: selectedPaperSize = Statement
+    // Photo sizes
+    case .photo4x6: selectedPaperSize = Photo4x6
+    case .photo5x7: selectedPaperSize = Photo5x7
+    case .photo8x10: selectedPaperSize = Photo8x10
+    // Use original PDF size
+    case .pdf:
+        selectedPaperSize = pdfPageSize
+    }
+
+    printInfo.paperSize = selectedPaperSize
+
+    // Create Print Operation
+    guard let printOperation = pdfDocument.printOperation(
+        for: printInfo,
+        scalingMode: scaling,
+        autoRotate: true
+    ) else {
+        fputs("Failed to create print operation for: \(pdfURL.path).\n", stderr)
+        if fastFail { exit(1) }
+        anyFailure = true
+        continue
+    }
+
+    // Fully Silent Print Operation
+    printOperation.showsPrintPanel = false
+    printOperation.showsProgressPanel = false
+
+    // Execute
+    let success = printOperation.run()
+    if !success {
+        fputs("Printing failed for: \(pdfURL.path)\n", stderr)
+        if fastFail { exit(1) }
+        anyFailure = true
+    }
 }
 
-// Fully Silent Print Operation
-printOperation.showsPrintPanel = false
-printOperation.showsProgressPanel = false
-
-// Execute
-let success = printOperation.run()
-exit(success ? 0 : 1)
+exit(anyFailure ? 1 : 0)
