@@ -25,6 +25,15 @@ NSApp.setActivationPolicy(.prohibited)
 //   pdf  -> Use PDF's original page size (default)
 // ------------------------------------------------------------
 
+func eprintln(_ text: String) {
+    if text.hasSuffix("\n") {
+        fputs(text, stderr)
+    } else {
+        fputs(text + "\n", stderr)
+    }
+    fflush(stderr)
+}
+
 func optionValue(_ names: [String], in args: [String]) -> String? {
     var i = 0
     while i < args.count {
@@ -82,26 +91,26 @@ Options:
 Examples:
   PDFPrintTool -f "/path/to/file1.pdf,/path/to/file2.pdf" -d "HP LaserJet" -s fit -p A4
   PDFPrintTool -f "/path/to/file1.pdf" -f "/path/to/file2.pdf" -d "HP LaserJet" -s actual --fast-fail
-  PDFPrintTool --File=/path/to/file.pdf --Printer="HP LaserJet" --Scaling=actual --papersize=pdf
+  PDFPrintTool --File="/path/to/file.pdf" --Printer="HP LaserJet" --Scaling=actual --papersize=pdf
 """
 
 func usageAndExit() -> Never {
-    fputs(fullUsageText, stderr)
+    eprintln(fullUsageText)
     exit(1)
 }
 
 func helpAndExit() -> Never {
-    fputs(fullUsageText, stderr)
+    eprintln(fullUsageText)
     exit(0)
 }
 
 func shortUsageAndExit() -> Never {
-    fputs("""
+    eprintln("""
 PDFPrintTool: missing arguments.
 Example:
   PDFPrintTool -f "/path/to/file.pdf" -d "HP LaserJet" -s fit -p A4
 Use -h or --Help for more information.
-""", stderr)
+""")
     exit(1)
 }
 
@@ -130,17 +139,17 @@ let fastFail = argv.contains("--fast-fail")
 // Enforce required flags; no positional fallback
 
 guard !pdfPaths.isEmpty else {
-    fputs("Missing required option: -f, --file, or --File.\n", stderr)
+    eprintln("Missing required option: -f, --file, or --File.")
     usageAndExit()
 }
 
 guard let printerName = printerFromFlag else {
-    fputs("Missing required option: -d, --printer, or --Printer.\n", stderr)
+    eprintln("Missing required option: -d, --printer, or --Printer.")
     usageAndExit()
 }
 
 guard let scalingModeArg = scalingFromFlag else {
-    fputs("Missing required option: -s, --scaling, or --Scaling.\n", stderr)
+    eprintln("Missing required option: -s, --scaling, or --Scaling.")
     usageAndExit()
 }
 
@@ -152,7 +161,7 @@ enum ScalingMode: String {
 }
 
 guard let scalingMode = ScalingMode(rawValue: scalingModeArg) else {
-    fputs("Invalid scaling mode '\(scalingModeArg)'. Use 'fit' or 'actual'. See -h or --Help for details.\n", stderr)
+    eprintln("Invalid scaling mode '\(scalingModeArg)'. Use 'fit' or 'actual'. See -h or --Help for details.")
     exit(1)
 }
 
@@ -172,7 +181,7 @@ enum PaperSizeOption: String {
 }
 
 guard let paperOption = PaperSizeOption(rawValue: pageSizeArg.lowercased()) else {
-    fputs("Invalid pagesize '\(pageSizeArg)'. See -h or --Help for valid sizes.\n", stderr)
+    eprintln("Invalid pagesize '\(pageSizeArg)'. See -h or --Help for valid sizes.")
     exit(1)
 }
 
@@ -251,12 +260,12 @@ func resolvePrinter(named name: String) -> NSPrinter? {
 }
 
 guard let printer = resolvePrinter(named: printerName) else {
-    fputs("Printer not found: \(printerName)\n", stderr)
-    fputs("Available printers:\n", stderr)
+    eprintln("Printer not found: \(printerName)")
+    eprintln("Available printers:")
     for name in NSPrinter.printerNames {
-        fputs("  \(name)\n", stderr)
+        eprintln("  \(name)")
     }
-    fputs("Use -d or --Printer to specify the target printer. See -h or --Help for details.\n", stderr)
+    eprintln("Use -d or --Printer to specify the target printer. See -h or --Help for details.")
     exit(1)
 }
 
@@ -295,8 +304,8 @@ for pdfPath in pdfPaths {
 
     var isDir: ObjCBool = false
     if !FileManager.default.fileExists(atPath: pdfURL.path, isDirectory: &isDir) || isDir.boolValue {
-        fputs("PDF file not found at path: \(pdfURL.path)\n", stderr)
-        fputs("Check the path or pass it with -f/--File. See -h or --Help for more information.\n", stderr)
+        eprintln("PDF file not found at path: \(pdfURL.path)")
+        eprintln("Check the path or pass it with -f/--File. See -h or --Help for more information.")
         if fastFail { exit(1) }
         anyFailure = true
         continue
@@ -304,7 +313,7 @@ for pdfPath in pdfPaths {
     // Load PDF document and first page
     guard let pdfDocument = PDFDocument(url: pdfURL),
           let firstPage = pdfDocument.page(at: 0) else {
-        fputs("Failed to load PDF or its first page for: \(pdfURL.path). Ensure the file is a valid PDF. See -h or --Help for usage.\n", stderr)
+        eprintln("Failed to load PDF or its first page for: \(pdfURL.path). Ensure the file is a valid PDF. See -h or --Help for usage.")
         if fastFail { exit(1) }
         anyFailure = true
         continue
@@ -375,7 +384,7 @@ for pdfPath in pdfPaths {
         scalingMode: scaling,
         autoRotate: true
     ) else {
-        fputs("Failed to create print operation for: \(pdfURL.path).\n", stderr)
+        eprintln("Failed to create print operation for: \(pdfURL.path).")
         if fastFail { exit(1) }
         anyFailure = true
         continue
@@ -388,7 +397,7 @@ for pdfPath in pdfPaths {
     // Execute
     let success = printOperation.run()
     if !success {
-        fputs("Printing failed for: \(pdfURL.path)\n", stderr)
+        eprintln("Printing failed for: \(pdfURL.path)")
         if fastFail { exit(1) }
         anyFailure = true
     }
