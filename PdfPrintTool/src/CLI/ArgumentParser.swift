@@ -15,31 +15,31 @@ struct PDFPrintTool: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "PDFPrintTool",
         abstract: "Print PDF files silently to a specified printer.",
-        version: "1.0.0"
+        version: "2.0.0"
     )
     
     // MARK: - Options
     
     @Option(
-        name: [.short, .long],
+        name: [.customShort("f"), .long],
         help: "PDF file paths. Supports comma-separated values or repeated flags."
     )
     var file: [String]
     
     @Option(
-        name: [.short, .long],
+        name: [.customShort("d"), .long],
         help: "Target printer name."
     )
     var printer: String
     
     @Option(
-        name: [.short, .long],
+        name: [.customShort("s"), .customLong("scaling")],
         help: "Scaling mode: fit or actual."
     )
     var scaling: ScalingMode
     
     @Option(
-        name: [.short, .long],
+        name: [.customShort("p"), .long],
         help: "Paper size (A4, Letter, Legal, pdf, etc.)."
     )
     var papersize: PaperSize = .pdf
@@ -50,22 +50,9 @@ struct PDFPrintTool: ParsableCommand {
     )
     var fastFail: Bool = false
     
-    // Optional explicit version flag (in addition to built-in)
-    @Flag(
-        name: [.long],
-        help: "Show version information."
-    )
-    var version: Bool = false
-    
     // MARK: - Execution
     
     func run() throws {
-        
-        // Handle explicit version flag (optional)
-        if version {
-            print(Self.configuration.version)
-            return
-        }
         
         // Expand comma-separated values
         let pdfPaths = file.flatMap {
