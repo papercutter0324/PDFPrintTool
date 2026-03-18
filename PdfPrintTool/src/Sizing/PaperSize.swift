@@ -9,8 +9,16 @@ import AppKit
 import ArgumentParser
 
 enum PaperSize: String, ExpressibleByArgument {
-    case a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, letter, legal, tabloid, ledger, executive, statement, photo4x6, photo5x7, photo8x10, pdf
-    // extend as needed
+    case a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10
+    case b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10
+    case c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10
+    case letter, legal, tabloid, ledger, executive, statement
+    case photo4x6, photo5x7, photo8x10
+    case pdf
+    
+    init?(argument: String) {
+        self.init(rawValue: argument.lowercased())
+    }
     
     var size: NSSize? {
         switch self {
