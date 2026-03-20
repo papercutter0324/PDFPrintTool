@@ -15,7 +15,7 @@ struct PDFPrintTool: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "PDFPrintTool",
         abstract: "Print PDF files silently to a specified printer.",
-        version: "2.0.0"
+        version: "2.1.0"
     )
     
     // MARK: - Options
@@ -53,7 +53,6 @@ struct PDFPrintTool: ParsableCommand {
     // MARK: - Execution
     
     func run() throws {
-        
         // Expand comma-separated values
         let pdfPaths = file.flatMap {
             $0.split(separator: ",")
@@ -73,6 +72,14 @@ struct PDFPrintTool: ParsableCommand {
         )
         
         let manager = PrintManager(options: options)
-        try manager.run()
+        do {
+            try manager.run()
+        } catch let e as PrintError {
+            // Map known print errors to specific exit codes
+            throw ExitCode(e.appExit.rawValue)
+        } catch {
+            // Unknown errors: non-zero generic exit
+            throw ExitCode(1)
+        }
     }
 }
