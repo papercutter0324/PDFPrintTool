@@ -21,7 +21,7 @@ struct PDFPrintTool: ParsableCommand {
           PDFPrintTool -f "/path/to/file1.pdf" -f "/path/to/file2.pdf" -d "HP LaserJet" -s actual --fast-fail
           PDFPrintTool --File="/path/to/file.pdf" --Printer="HP LaserJet" --Scaling=actual --papersize=pdf
         """,
-        version: "2.1.0 (Build: 14)",
+        version: "2.1.0 (Build: 14)"
     )
     
     // MARK: - Options
