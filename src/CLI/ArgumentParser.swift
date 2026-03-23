@@ -52,7 +52,7 @@ struct PDFPrintTool: ParsableCommand {
     
     @Flag(
         name: [.long],
-        help: "Exit immediately on error"
+        help: "Exit immediately on error."
     )
     var fastFail: Bool = false
     

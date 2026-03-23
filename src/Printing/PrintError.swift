@@ -32,7 +32,7 @@ extension PrintError: LocalizedError {
             return "Printing failed: \(path)"
             
         case .partialFailure:
-            return "One or more print jobs failed"
+            return "One or more print jobs failed."
         }
     }
 }
