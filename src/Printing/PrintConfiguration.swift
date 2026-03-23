@@ -7,6 +7,17 @@
 
 import AppKit
 
+extension NSPrintInfo.AttributeKey {
+    static let duplex = NSPrintInfo.AttributeKey("NSPrintDuplex")
+    static let pmDuplexing = NSPrintInfo.AttributeKey("com.apple.print.PrintSettings.PMDuplexing")
+}
+
+enum DuplexMode: Int {
+    case none = 1        // simplex
+    case longEdge = 2    // duplex, long-edge (NoTumble)
+    case shortEdge = 3   // duplex, short-edge (Tumble)
+}
+
 enum PrintConfiguration {
     
     static func create(printer: NSPrinter) -> NSPrintInfo {
@@ -15,9 +26,15 @@ enum PrintConfiguration {
         
         info.jobDisposition = .spool
         
-        info.dictionary()["NSPrintDuplex"] = 2
-        info.dictionary()["com.apple.print.PrintSettings.PMDuplexing"] = 2
+        let duplexMode: DuplexMode = .longEdge
+        
+        info.dictionary()["NSPrintDuplex"] = duplexMode.rawValue
+        info.dictionary()["com.apple.print.PrintSettings.PMDuplexing"] = duplexMode.rawValue
         
         return info
     }
 }
+
+import AppKit
+
+
